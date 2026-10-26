@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 import { tmpdir } from 'node:os';
 import type { Browser, Page } from 'playwright-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -56,7 +57,7 @@ async function setup(stalled?: ReadStage) {
   const doc = document(stalled);
   const screenshot = vi.fn(async () => Buffer.from([1, 2, 3]));
   const count = vi.fn(async () => 0);
-  const page = {
+  const page = Object.assign(new EventEmitter(), {
     isClosed: vi.fn(() => false),
     waitForLoadState: async () => undefined,
     viewportSize: () => ({ width: 100, height: 80 }),
@@ -64,15 +65,14 @@ async function setup(stalled?: ReadStage) {
     frames: () => [{ locator: () => ({ count }) }],
     evaluateHandle: doc.evaluateHandle,
     screenshot,
-  };
-  const context = {
-    newPage: vi.fn(async (): Promise<Page> => page as unknown as Page),
+  });
+  const context = Object.assign(new EventEmitter(), {
+    newPage: vi.fn(async (): Promise<Page> => { context.emit('page', page); return page as unknown as Page; }),
     addInitScript: async () => undefined,
     pages: () => [],
     setDefaultTimeout: () => undefined,
-    on: () => undefined,
     close: async () => undefined,
-  };
+  });
   const browser = {
     isConnected: () => true,
     newContext: async () => context,
@@ -187,7 +187,19 @@ describe('whole observation capture ownership', () => {
     const failure = expect(fixture.surface.observe(fixture.operation)).rejects.toMatchObject({ code: 'NODE_STALE' });
     await vi.advanceTimersByTimeAsync(0);
     fixture.page.isClosed.mockReturnValue(true);
-    fixture.context.newPage.mockResolvedValue({ ...fixture.page, isClosed: () => false } as unknown as Page);
+    fixture.context.newPage.mockImplementation(async () => {
+      const replacement = Object.assign(new EventEmitter(), {
+        isClosed: () => false,
+        waitForLoadState: fixture.page.waitForLoadState,
+        viewportSize: fixture.page.viewportSize,
+        url: fixture.page.url,
+        frames: fixture.page.frames,
+        evaluateHandle: fixture.page.evaluateHandle,
+        screenshot: fixture.page.screenshot,
+      }) as unknown as Page;
+      fixture.context.emit('page', replacement);
+      return replacement;
+    });
     await fixture.surface.ensurePage();
     fixture.gate.resolve();
     await failure;

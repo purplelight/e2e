@@ -265,6 +265,16 @@ describe('TraceRecorder', () => {
 });
 
 describe('describeTarget', () => {
+  it('never relocates or replays an ephemeral chooser as a later picker with the same name', () => {
+    const chooser = redacted({ ref: { id: 'chooser-original', revision: 'r1' }, role: 'filechooser', name: 'File chooser', attributes: { type: 'file', accept: '.txt' } });
+    const replacement = redacted({ ...chooser, ref: { id: 'chooser-replacement', revision: 'r2' } });
+    expect(describeTarget(chooser)).toBeUndefined();
+    expect(describeTarget(replacement)).toBeUndefined();
+    const recorder = makeRecorder();
+    recorder.record({ name: 'upload', node: chooser, paths: ['fixtures/contract.txt'] });
+    expect(recorder.finalize(conclusion)?.truncated).toBe(true);
+    expect(describeTarget(redacted({ ...chooser, role: 'button', name: 'Attachment' }))).toMatchObject({ role: 'button', name: 'Attachment' });
+  });
   it('drops text duplicating the name and never records values', () => {
     expect(describeTarget(upgradeButton)?.text).toBeUndefined();
     const described = describeTarget(

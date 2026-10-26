@@ -5,6 +5,7 @@
  * leases, and release on every path.
  */
 
+import { EventEmitter } from 'node:events';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -25,22 +26,21 @@ vi.mock('../../src/browser-connection.ts', async (importOriginal) => ({
 /** A browser the mocked attach hands back: enough of one for a context per attempt or a persistent default context. */
 function fakeBrowser(contextId: string) {
   let connected = true;
-  const page = {
+  const page = Object.assign(new EventEmitter(), {
     isClosed: () => false,
     close: async () => undefined,
     viewportSize: () => ({ width: 1280, height: 720 }),
     screencast: { start: vi.fn(async ({ path: file, onFrame }: { path: string; onFrame?: () => void }) => { writeFileSync(file, 'webm'); onFrame?.(); }), stop: async () => undefined },
-  } as unknown as Page;
-  const context = {
-    newPage: async () => page,
+  }) as unknown as Page;
+  const context = Object.assign(new EventEmitter(), {
+    newPage: async () => { context.emit('page', page); return page; },
     addInitScript: async () => undefined,
     setDefaultTimeout: () => undefined,
-    on: () => undefined,
     route: async () => undefined,
     close: async () => undefined,
     pages: () => [],
     _channel: { registerSelectorEngine: async () => undefined },
-  };
+  });
   const browser = {
     isConnected: () => connected,
     newContext: async () => context,

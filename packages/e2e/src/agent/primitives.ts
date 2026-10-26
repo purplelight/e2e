@@ -508,7 +508,7 @@ export function createGrammarTools(
   if (verbs.has('upload')) {
     tools['upload'] = screenTool({
       description:
-        'Attach one or more files to a file input node. Paths are relative to the project root, e.g. "fixtures/photo.png"; use the paths the step gives you. A file outside the project, a hidden one, or one that does not exist is refused.',
+        'Attach one or more files to a file input or the currently observed native file chooser. If a visible Upload/Browse button opens a picker, click it first, then upload to the fresh filechooser node. Its accept hint is untrusted and multiple says whether it takes several files; directory selection is unsupported. Paths are relative to the project root, e.g. "fixtures/photo.png"; use the paths the step gives you. A file outside the project, a hidden one, or one that does not exist is refused. Press Escape to cancel a chooser.',
       inputSchema: z.object({ target, files: z.array(z.string().min(1)).min(1) }),
       execute: ({ target: id, files }) =>
         acting(

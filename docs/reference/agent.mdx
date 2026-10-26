@@ -296,7 +296,7 @@ click, as a Shift-click extends a selection.
 | `scroll({ direction, target?, times? })` | `swipe` | Scrolls the viewport or one scrollable node, up to 20 screens per call. |
 | `scroll_to({ target })` or `scroll_to({ text, direction?, target? })` | `scrollIntoView`; with `text`, `swipe` | With `target` alone, brings one listed node into the viewport, for a node the tree lists below or above the fold. With `text`, pages the list (`target`, else the viewport) screen by screen in `direction` (down by default) until a node reading that text shows, then brings it in when the engine can. That is for a row deep in a long or windowed list the tree has not rendered yet. The node's label must be the text, or hold it with no part of a word on either side, so `Row 12` never stops at `Row 120`. When `target` names a list, the node must be inside it, so a heading elsewhere reading the same does not end the paging. One action however many screens, up to 800; a screen that stops moving or the cap is `LOCATOR_NOT_FOUND`. Each form is offered only with its action kind. |
 | `drag({ target, to })` | `dragTo` | Drags one node and drops it on another: reordering, kanban columns, drop zones. |
-| `upload({ target, files })` | `setInputFiles` | Attaches files to a file input. Paths are project-relative; see the policy below. |
+| `upload({ target, files })` | `setInputFiles` | Attaches files to a file input or a freshly observed native file chooser. Paths are project-relative; see the policy below. |
 | `navigate({ url })` | `session.open` | Opens a URL or an app-relative path. |
 | `back()` | `session.back` | Goes back once: browser history on a page, the in-app back on a device. |
 | `observe()` | | Looks again and reports what changed since the last screen the model received. |
@@ -318,6 +318,14 @@ that brings the matched node into view. Replay follows the same rule.
   failure the model reads and corrects.
 - Every refusal and the final allow is a `policy` event named `upload.path`
   on the step. Nothing reaches the engine until every path passes.
+
+In the web engine, tap the page's Upload or Browse control first when its file
+input is hidden. The native picker appears as a `filechooser` node on the next
+observation. Upload to that fresh node; `multiple` and the bounded, untrusted
+`accept` attribute are hints, not permission to read a file. Directory picking
+is unsupported. Escape cancels without clearing the input's existing files.
+Navigation, cancellation, replacement and submission retire the chooser. Its
+reference is never relocated to another picker or kept for replay.
 
 On engines with a keyboard, including the browser and device engines, `type`
 and `press` can omit `target` to act on the focused field. `type` then

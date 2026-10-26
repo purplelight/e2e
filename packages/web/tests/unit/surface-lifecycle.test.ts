@@ -1,4 +1,5 @@
 /** Attempt transitions isolate callbacks and retain finalized artifacts after setup failure. */
+import { EventEmitter } from 'node:events';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -32,7 +33,7 @@ beforeEach(async () => {
   focus = vi.fn(async () => true);
   press = vi.fn(async (_key: string) => undefined);
   type = vi.fn(async (_text: string) => undefined);
-  const page = {
+  const page = Object.assign(new EventEmitter(), {
     isClosed: () => false,
     close: async () => undefined,
     goto: async () => undefined,
@@ -43,18 +44,20 @@ beforeEach(async () => {
       start: async ({ path: file, onFrame }: { path: string; onFrame?: () => void }) => { writeFileSync(file, 'recording'); onFrame?.(); },
       stop: async () => undefined,
     },
-  };
+  });
   browser = {
     isConnected: () => true,
-    newContext: vi.fn(async () => ({
-      addInitScript: async () => undefined,
-      pages: () => [],
-      setDefaultTimeout: () => undefined,
-      on: () => undefined,
-      route: async (_predicate: unknown, handler: (route: Route) => Promise<void>) => { registered = handler; },
-      close: async () => undefined,
-      newPage: async () => page,
-    })),
+    newContext: vi.fn(async () => {
+      const context = Object.assign(new EventEmitter(), {
+        addInitScript: async () => undefined,
+        pages: () => [],
+        setDefaultTimeout: () => undefined,
+        route: async (_predicate: unknown, handler: (route: Route) => Promise<void>) => { registered = handler; },
+        close: async () => undefined,
+        newPage: async () => { context.emit('page', page); return page; },
+      });
+      return context;
+    }),
   } as unknown as Browser;
   acquire.mockResolvedValue(browser);
   surface = new PlaywrightSurface({});

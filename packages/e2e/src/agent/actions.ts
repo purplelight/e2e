@@ -297,6 +297,8 @@ function describePlaced(
  * observation (`redactNode`), each field in the one-line form read here too.
  */
 export function describeTarget(node: RedactedNode): TraceTargetDescriptor | undefined {
+  // A native chooser is a one-shot capability, not a control another chooser can replace by name.
+  if (node.role === 'filechooser') return undefined;
   const field = (value: string | undefined): string | undefined => {
     if (value === undefined) return undefined;
     const collapsed = collapseText(value);

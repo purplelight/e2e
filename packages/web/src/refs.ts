@@ -12,6 +12,10 @@
 
 import { EngineError, type EngineSnapshot, type NodeRef } from 'e2e/engine';
 import type { ActionTarget } from './support.ts';
+import type { FileChooserTarget } from './file-chooser.ts';
+
+/** Native chooser refs share observation freshness but never become locator targets. */
+export type StoredTarget = ActionTarget | FileChooserTarget;
 
 /** Located refs are pruned oldest-first past this bound so the map cannot grow unboundedly. */
 const MAX_STORED_REFS = 2048;
@@ -19,14 +23,14 @@ const MAX_STORED_REFS = 2048;
 /** A complete observation and the private handles that back its semantic refs. */
 export interface CapturedObservation {
   readonly snapshot: EngineSnapshot;
-  readonly generation: Map<string, ActionTarget>;
+  readonly generation: Map<string, StoredTarget>;
 }
 
 export class RefRegistry {
   private counter = 0;
   private capture = 0;
   private readonly located = new Map<string, ActionTarget>();
-  private observation = new Map<string, ActionTarget>();
+  private observation = new Map<string, StoredTarget>();
 
   mintId(): string {
     this.counter += 1;
@@ -56,7 +60,7 @@ export class RefRegistry {
    * Ids are the engine's; revisions are the harness's. The adapter already
    * rejected a ref from a superseded resolution, so lookup is by id alone.
    */
-  lookup(ref: NodeRef): ActionTarget {
+  lookup(ref: NodeRef): StoredTarget {
     const target = this.located.get(ref.id) ?? this.observation.get(ref.id);
     if (target === undefined) {
       throw new EngineError('NODE_STALE', `node reference ${ref.id} is stale`, { retryable: true });
@@ -90,7 +94,7 @@ export class RefRegistry {
   }
 
   /** Disposes every element handle in one observation generation. */
-  static dispose(generation: ReadonlyMap<string, ActionTarget>): void {
+  static dispose(generation: ReadonlyMap<string, StoredTarget>): void {
     for (const target of generation.values()) {
       if (target.kind === 'element') void target.element.dispose().catch(() => undefined);
     }

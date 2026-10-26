@@ -224,8 +224,8 @@ export interface ExecutorActions {
    */
   scrollUntil(text: string, direction: ScrollDirection, list?: ExecutorTarget): Promise<void>;
   /**
-   * Attaches files to a file input. Paths are taken relative to the project
-   * root and authorized by the harness before the engine sees them: a file
+   * Attaches files to a file input or a freshly observed native file chooser.
+   * Paths are project-relative and authorized before the engine sees them: a file
    * outside the project, under a hidden directory, or absent is refused
    * (`upload` in `target.verbs`).
    */

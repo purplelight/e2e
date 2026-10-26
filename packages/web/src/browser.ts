@@ -652,7 +652,7 @@ export function createBrowserFixture(surface: PlaywrightSurface, context: Engine
       up: (key) =>
         surface.guard(context.operation(), 'keyboard.up', () => surface.requirePage().keyboard.up(key), classifyInputError),
       press: (key) =>
-        surface.guard(context.operation(), 'keyboard.press', () => surface.requirePage().keyboard.press(key), classifyInputError),
+        surface.pressKey(key, context.operation(), false),
       type: (text) =>
         surface.guard(context.operation(), 'keyboard.type', () => surface.requirePage().keyboard.type(text), classifyInputError),
     },

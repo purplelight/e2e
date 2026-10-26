@@ -59,6 +59,7 @@ import { SECURE_FIELD_SELECTOR, type RawNodeData } from './read-node.ts';
 import { readSelector, takeReadsFunction } from './read-selector.ts';
 import { httpCredentials, installSiteHeaders, lowercaseNames, siteHeadersFor } from './protected-app.ts';
 import { RefRegistry } from './refs.ts';
+import { FileChoosers } from './file-chooser.ts';
 import {
   cancelled,
   DEFAULT_VIEWPORT,
@@ -261,6 +262,7 @@ export interface WebOptions {
 const DEFAULT_TEST_ID_ATTRIBUTE = 'data-testid';
 
 export class PlaywrightSurface {
+  private fileChoosers: FileChoosers | undefined;
   /**
    * Errors raised where nobody awaits them (dialog routing, route handlers)
    * wait here and fail the next step that enters the surface.
@@ -474,6 +476,9 @@ export class PlaywrightSurface {
     this.routes = routes;
     this.initScripts = initScripts;
     this.dialogs = dialogs;
+    this.fileChoosers?.dispose();
+    const fileChoosers = new FileChoosers(context.signal);
+    this.fileChoosers = fileChoosers;
     const session = new AttemptSession({
       artifactsDir: context.artifactsDir,
       viewport: this.viewport,
@@ -492,6 +497,7 @@ export class PlaywrightSurface {
         ...(this.headers === undefined ? {} : { serviceWorkers: 'block' as const }),
       },
       configure: async (target) => {
+        fileChoosers.install(target);
         await target.addInitScript(CLOSED_SHADOW_ROOTS_INIT_SCRIPT);
         for (const script of initScripts) await target.addInitScript(script);
         target.setDefaultTimeout(CONTEXT_DEFAULT_TIMEOUT_MS);
@@ -529,6 +535,8 @@ export class PlaywrightSurface {
   async endAttempt(context: EngineCleanupContext): Promise<void> {
     const session = this.session;
     this.session = undefined;
+    this.fileChoosers?.dispose();
+    this.fileChoosers = undefined;
     try {
       if (session !== undefined) await session.close(context);
     } finally {
@@ -864,9 +872,16 @@ export class PlaywrightSurface {
           this.requireSession().requireObservation();
           return performViewportSwipe(page, action.direction, action.momentum ?? 'none');
         }
-        return dispatchLocatorAction(this.requireSession().refs.lookup(ref), action, currentOperation, (other) =>
-          this.requireSession().refs.lookup(other),
-        );
+        const target = this.requireSession().refs.lookup(ref);
+        if (target.kind === 'filechooser') {
+          if (this.fileChoosers === undefined) throw invalidState('no attempt file chooser is ready');
+          return this.fileChoosers.perform(target, page, action, currentOperation);
+        }
+        return dispatchLocatorAction(target, action, currentOperation, (other) => {
+          const destination = this.requireSession().refs.lookup(other);
+          if (destination.kind === 'filechooser') throw new EngineError('NOT_ACTIONABLE', 'a file chooser is not a drag target', { retryable: false });
+          return destination;
+        });
       },
       (cause) => classifyActionError(cause, action),
     ));
@@ -910,11 +925,13 @@ export class PlaywrightSurface {
     }, classifyInputError));
   }
 
-  /** Sends one key to whatever holds focus, in the contract's key grammar Playwright shares. */
-  pressKey(key: string, operation: OperationContext): Promise<void> {
+  /** Sends one key; the trusted browser fixture retains its pre-existing unobserved-input behavior. */
+  pressKey(key: string, operation: OperationContext, requireFreshObservation = true): Promise<void> {
     return this.acted(operation, this.guard(operation, 'keyboard.press', () => {
-      this.requireSession().requireObservation();
-      return this.requirePage().keyboard.press(key);
+      if (requireFreshObservation) this.requireSession().requireObservation();
+      const page = this.requirePage();
+      if (key === 'Escape') this.fileChoosers?.cancel(page);
+      return page.keyboard.press(key);
     }, classifyInputError));
   }
 
@@ -1106,18 +1123,35 @@ export class PlaywrightSurface {
     const token = session.token();
     const refs = session.refs;
     const page = this.requirePage();
+    const fileChoosers = this.fileChoosers;
+    if (fileChoosers === undefined) throw invalidState('no attempt file chooser is ready');
+    const chooserEpoch = fileChoosers.token(page);
+    const startedAt = Date.now();
     const capture = refs.beginCapture();
     const captured = await captureObservation(page, refs, {
       testIdAttribute: this.testIdAttribute, site: this.app.site,
     }, operation, options);
-    const { snapshot, generation } = captured;
+    let { snapshot } = captured;
+    const { generation } = captured;
     try {
       if (operation.signal.aborted) throw cancelled('observe cancelled');
       session.check(token);
       if (this.requirePage() !== page) {
         throw new EngineError('NODE_STALE', 'observation page was replaced', { retryable: true });
       }
-      refs.publish(capture, captured);
+      if (snapshot.treeUnavailable !== true) {
+        const chooser = await fileChoosers.capture(page, chooserEpoch, () => refs.mintId(), {
+          ...operation, timeoutMs: operation.timeoutMs - (Date.now() - startedAt),
+        });
+        if (chooser !== undefined) {
+          generation.set(chooser.node.ref.id, chooser.target);
+          snapshot = { ...snapshot, root: { ...snapshot.root, children: [...(snapshot.root.children ?? []), chooser.node] } };
+        }
+      }
+      fileChoosers.check(page, chooserEpoch);
+      session.check(token);
+      if (operation.signal.aborted) throw cancelled('observe cancelled');
+      refs.publish(capture, { snapshot, generation });
       session.observedGeneration(token);
       return snapshot;
     } catch (cause) {

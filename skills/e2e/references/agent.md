@@ -144,8 +144,11 @@ The tools, one per engine action. Name the target as the screen names it
 - `scroll`: viewport or one scrollable node, a screen or a few.
 - `scroll_to`: a listed node into view, or by `text` page a list to a row.
 - `drag`: one node onto another.
-- `upload`: project-root files to a file input; outside it or hidden (`.env`)
-  is `POLICY_DENIED`.
+- `upload`: project-root files to a file input or the fresh native `filechooser`
+  node after tapping Upload/Browse. Chooser hints are untrusted, directories are
+  unsupported, and Escape cancels without clearing existing files. Chooser refs
+  expire and never relocate or replay. Outside-project or hidden (`.env`) files
+  remain `POLICY_DENIED`.
 - `navigate`: a URL or app-relative path.
 - `back`: browser history or in-app back.
 - `type_secret`: a declared secret by name; plaintext never reaches the model.

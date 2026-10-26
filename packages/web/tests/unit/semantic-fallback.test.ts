@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Browser, ElementHandle, Page } from 'playwright-core';
@@ -25,24 +26,24 @@ async function setup() {
     { count: vi.fn(async () => 0) },
   ];
   const screenshot = vi.fn(async (_options: unknown) => Buffer.from([1, 2, 3]));
-  const page = {
+  const page = Object.assign(new EventEmitter(), {
     isClosed: () => false,
     waitForLoadState: async () => undefined,
     viewportSize: () => ({ width: 100, height: 80 }),
     url: () => 'https://app.test/current',
     frames: () => [{ locator: (selector: string) => selector.startsWith('e2e-closed') ? masks[1] : masks[0] }],
     screenshot,
-  } as unknown as Page;
+  }) as unknown as Page;
+  const context = Object.assign(new EventEmitter(), {
+    newPage: async () => { context.emit('page', page); return page; },
+    addInitScript: async () => undefined,
+    pages: () => [],
+    setDefaultTimeout: () => undefined,
+    close: async () => undefined,
+  });
   const browser = {
     isConnected: () => true,
-    newContext: async () => ({
-      newPage: async () => page,
-      addInitScript: async () => undefined,
-      pages: () => [],
-      setDefaultTimeout: () => undefined,
-      on: () => undefined,
-      close: async () => undefined,
-    }),
+    newContext: async () => context,
   } as unknown as Browser;
   vi.spyOn(BrowserConnection.prototype, 'acquire').mockResolvedValue(browser);
   const surface = new PlaywrightSurface({});
