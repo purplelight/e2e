@@ -384,8 +384,9 @@ request bodies. A route that validates file bytes must refuse that partial body.
 `buffered` reads the files selected by the existing upload action into bounded
 Playwright file payloads. It does not reconstruct or replace an HTTP request.
 The normal upload path policy still runs before an agent's selected paths reach
-the engine. Both file-input uploads and a native chooser using these payloads
-produce inspectable multipart bodies.
+the engine. This option currently covers the engine's file-input upload action.
+It does not add a public chooser API. The common helper can also supply payloads
+to a future native chooser implementation.
 
 - At most 32 regular files and 2,000,000 total bytes. Larger uploads fail before
   dispatch. They never silently fall back to the partial-body path behavior.

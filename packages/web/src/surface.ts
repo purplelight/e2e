@@ -866,6 +866,7 @@ export class PlaywrightSurface {
    * on the root acts on the document element the root stands for.
    */
   perform(ref: NodeRef, action: LocatorAction, operation: OperationContext): Promise<void> {
+    let uploadDispatched = false;
     return this.acted(operation, this.guard(
       operation,
       action.kind,
@@ -876,10 +877,15 @@ export class PlaywrightSurface {
           return performViewportSwipe(page, action.direction, action.momentum ?? 'none');
         }
         return dispatchLocatorAction(this.requireSession().refs.lookup(ref), action, currentOperation, (other) =>
-          this.requireSession().refs.lookup(other), this.fileUploads,
+          this.requireSession().refs.lookup(other), this.fileUploads, () => { uploadDispatched = true; },
         );
       },
-      (cause) => classifyActionError(cause, action),
+      (cause) => {
+        if (this.fileUploads === 'buffered' && action.kind === 'setInputFiles' && !uploadDispatched && cause instanceof EngineError && cause.code === 'OPERATION_TIMEOUT') {
+          return new EngineError('NOT_ACTIONABLE', 'buffered upload timed out before native file selection started', { retryable: false, cause });
+        }
+        return classifyActionError(cause, action);
+      },
     ));
   }
 

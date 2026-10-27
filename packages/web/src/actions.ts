@@ -107,6 +107,7 @@ export async function dispatchLocatorAction(
   operation: ConnectionBudget,
   lookup: (ref: NodeRef) => ActionTarget,
   fileUploads: FileUploadMode = 'path',
+  onUploadDispatch?: () => void,
 ): Promise<void> {
   const timeout = operation.timeoutMs;
   const locator = asActionable(target);
@@ -167,6 +168,7 @@ export async function dispatchLocatorAction(
       else await withConnectionBudget(operation, 'buffered file upload', async remaining => {
         const files = await prepareUploadFiles(action.paths, fileUploads, remaining());
         const budget = remaining();
+        onUploadDispatch?.();
         await locator.setInputFiles(files, { timeout: budget.timeoutMs });
       });
       return;
